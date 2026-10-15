@@ -316,23 +316,35 @@ public class GraphExchangeSession extends ExchangeSession {
                 } else {
                     // with graph API there is no way to directly retrieve the MIME content to access VCALENDAR object
                     // so implementation is based on graph and mapi (extended) properties
+                    GraphObject eventObject = graphObject;
+                    if (eventObject.optString("iCalUId") == null) {
+                        JSONObject jsonResponse = executeJsonRequest(new GraphRequestBuilder()
+                                .setMethod(HttpGet.METHOD_NAME)
+                                .setMailbox(folderId.mailbox)
+                                .setObjectType("events")
+                                .setObjectId(id)
+                                .setSelectFields(EVENT_ATTRIBUTES)
+                                .setTimezone(getTimezoneId())
+                        );
+                        eventObject = new GraphObject(jsonResponse);
+                    }
 
                     VCalendar localVCalendar = new VCalendar();
                     localVCalendar.setPropertyValue("VERSION", "2.0");
                     // set email on vcalendar object for shared calendars
                     localVCalendar.setEmail(getCalendarEmail(folderPath));
                     // set timezone based on start date timezone
-                    String originalStartTimeZone = graphObject.optString("originalStartTimeZone");
+                    String originalStartTimeZone = eventObject.optString("originalStartTimeZone");
                     if (originalStartTimeZone != null && !"tzone://Microsoft/Custom".equals(originalStartTimeZone)) {
                         localVCalendar.setTimezone(getVTimezone(originalStartTimeZone));
                     } else {
                         localVCalendar.setTimezone(getVTimezone());
                     }
-                    localVCalendar.addVObject(buildVEvent(graphObject));
+                    localVCalendar.addVObject(buildVEvent(eventObject));
 
-                    handleException(localVCalendar, graphObject);
+                    handleException(localVCalendar, eventObject);
 
-                    handleRecurrence(localVCalendar, graphObject);
+                    handleRecurrence(localVCalendar, eventObject);
 
                     content = localVCalendar.toString().getBytes(StandardCharsets.UTF_8);
                 }
@@ -4323,7 +4335,7 @@ public class GraphExchangeSession extends ExchangeSession {
 
     @Override
     public List<ExchangeSession.Event> searchEvents(String folderPath, Set<String> attributes, Condition condition) throws IOException {
-        return searchEvents(folderPath, true, condition);
+        return searchEvents(folderPath, false, condition);
     }
 
     /**
